@@ -1,0 +1,20 @@
+- hosts: 127.0.0.1
+  tasks:
+    - ec2:
+        key_name: 
+        instance_type: t2.micro
+        image: ami-52c7b43d
+        wait: yes
+        group: launch-wizard-1
+        instance_tags:
+            foo: ansible-instance
+        exact_count: 1
+        count_tag: foo
+        vpc_subnet_id: subnet-846cb5c9
+        region: ap-south-1
+      environment:
+#         - AWS_ACCESS_KEY_ID: AKIAJH3G766R3L4IBK3A
+#         - AWS_SECRET_ACCESS_KEY: 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
+         - http_proxy: "http://135.245.115.123:8000"
+         - https_proxy: "https://135.245.115.123:8000"
+
