@@ -1,20 +1,58 @@
 - hosts: 127.0.0.1
+  vars:
+    proxy_env:
+      http_proxy: "{{ lookup('ini', 'http_proxy section=default file=/root/sample.ini') }}"
+      https_proxy: "{{ lookup('ini', 'https_proxy section=default file=/root/sample.ini') }}"
   tasks:
-    - ec2:
-        key_name: 
-        instance_type: t2.micro
-        image: ami-52c7b43d
-        wait: yes
-        group: launch-wizard-1
+
+#Creating the Keys required 
+    - name: Creating the required keys
+      ec2_key:
+        name: "{{ lookup('ini', 'name section=keys file=/root/sample.ini') }}"
+        key_material: "{{ item }}"
+      with_file:
+         - "{{ lookup('ini', 'public_key_file section=keys file=/root/sample.ini') }}"
+      environment: "{{proxy_env}}"
+      when: "{{ lookup('ini', 'create section=keys file=/root/sample.ini') }}"
+
+
+# Spinning up of the required Instances in the cloud
+    - name: Spinning up the required instancs
+      ec2:
+        id: "{{ item.name }}"
+        key_name: "{{ item.key_name }}"
+        instance_type: "{{ item.instance_type }}"
+        image: "{{ item.image }}"
+        wait: "{{ item.wait }}"
+        group: "{{ item.group }}"
         instance_tags:
-            foo: ansible-instance
-        exact_count: 1
-        count_tag: foo
-        vpc_subnet_id: subnet-846cb5c9
-        region: ap-south-1
-      environment:
-#         - AWS_ACCESS_KEY_ID: AKIAJH3G766R3L4IBK3A
-#         - AWS_SECRET_ACCESS_KEY: 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
-         - http_proxy: "http://135.245.115.123:8000"
-         - https_proxy: "https://135.245.115.123:8000"
+            Name: "{{ item.name }}"
+        vpc_subnet_id: "{{ item.vpc_subnet_id }}"
+        region: "{{ item.region }}"
+        volumes: "{{ item.volumes }}"
+      with_configread: type=aws_instance profile="datanode,namenode" number=10
+      register: awsout
+      environment: "{{proxy_env}}"
+
+# Capturing the the data to a Json file
+    - name: Capturing the data of the Volumes
+      json_create: file=/root/aws_nodes.json data={{ awsout.results }}
+
+
+# Creating the Dynamic inventory
+    - name: Generating the Dynamic invntory
+      add_host: name={{ item.public_ip }} groups={{ item.profile }}
+      with_getnodes: type="aws_instance" profile="namenode,datanode" property="public_ip"
+
+- hosts: namenode
+  remote_user: ec2-user
+  tasks:
+      - name: Executing the uname
+        shell: uname -a
+
+- hosts: datanode
+  remote_user: ec2-user
+  tasks:
+      - name: Executing the uname
+        shell: uname -a
 
