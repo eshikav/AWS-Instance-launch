@@ -1,0 +1,104 @@
+
+---
+#- include_vars: ../../../vars.yaml
+
+- name: copying blueprint template to ambari_blueprint role
+  shell: echo "../../"
+  register: path
+  delegate_to: 127.0.0.1
+
+
+- name: Executing python script
+  command: python {{ path.stdout }}DataLake_Config_Builder/platform/deploy_cluster.py "{{CRED_BUNDLE}}"
+  delegate_to: 127.0.0.1
+  register: command_result
+  ignore_errors: yes
+  no_log: True
+
+- name: Error in deploy_cluster.py script
+  fail: msg={{ command_result }}
+  when: command_result.rc > 0
+
+- name: copying blueprint template to ambari_blueprint role
+  copy: src=../../../conf/service_blueprint_1.json dest="{{ role_path }}/files/service_blueprint.json"
+  delegate_to: 127.0.0.1
+
+- name: copying cluster template to ambari_blueprint role
+  copy: src=../../../conf/cluster_blueprint_1.json dest="{{ role_path }}/files/cluster_template.json"
+  delegate_to: 127.0.0.1
+
+- name: Make sure the ambari blueprint doesn't already exist
+  uri: url=http://{{ AMBARI.AMBARI_SERVER.host }}:8080/api/v1/blueprints/NOKIACLUSTER_blueprint?validate_topology=false
+       method=DELETE
+       force_basic_auth=yes
+       user=admin
+       password=admin
+       HEADER_X-Requested-By="ambari"
+       status_code=200,201,202,404
+  ignore_errors: true
+
+- name: Register the ambari blueprint with the Ambari server
+  uri: url=http://{{ AMBARI.AMBARI_SERVER.host }}:8080/api/v1/blueprints/NOKIACLUSTER_blueprint?validate_topology=false
+       method=POST
+       force_basic_auth=yes
+       user=admin
+       password=admin
+       HEADER_X-Requested-By="ambari"
+       body=" {{ lookup('file','service_blueprint.json') | to_json }}"
+       body_format=json
+       status_code=200,201,202
+
+- name: Register the blueprint with the Ambari server
+  uri: url=http://{{ AMBARI.AMBARI_SERVER.host }}:8080/api/v1/clusters/{{ CSF_CDLK_CLUSTER_CONFIG.cluster_name }}
+       method=POST
+       force_basic_auth=yes
+       user=admin
+       password=admin
+       HEADER_X-Requested-By="ambari"
+       body=" {{ lookup('file','cluster_template.json') | to_json }}"
+       body_format=json
+       status_code=200,201,202
+       return_content=yes
+  register: Installation_req_id
+
+- name: Displaying the Request ID
+  debug:
+    msg: "Status Check of DATALAKE Installation with request ID - {{ (Installation_req_id.content|from_json)['Requests']['id'] }}"
+
+- name: First Status Check
+  uri: url=http://{{ AMBARI.AMBARI_SERVER.host }}:8080/api/v1/clusters/{{ CSF_CDLK_CLUSTER_CONFIG.cluster_name }}/requests/{{ item }}
+       method=GET
+       force_basic_auth=yes
+       user=admin
+       password=admin
+       HEADER_X-Requested-By="ambari"
+       return_content=yes
+  register: status_response
+  with_items: "{{ (Installation_req_id.content|from_json)['Requests']['id'] }}"
+
+- name: Displaying the status of Installation
+  debug:
+    msg: "DATALAKE Installation is  {{ (status_response['results'][0]['content']|from_json)['Requests']['request_status'] }}"
+
+- name: Polling the Status of Installation
+  uri: url=http://{{ AMBARI.AMBARI_SERVER.host }}:8080/api/v1/clusters/{{ CSF_CDLK_CLUSTER_CONFIG.cluster_name }}/requests/{{ item }}
+       method=GET
+       force_basic_auth=yes
+       user=admin
+       password=admin
+       HEADER_X-Requested-By="ambari"
+       return_content=yes
+  register: status_response
+  with_items: "{{ (Installation_req_id.content|from_json)['Requests']['id'] }}"
+  until: ((status_response['content']|from_json)['Requests']['request_status'] is defined) and ((((status_response['content']|from_json)['Requests']['request_status']) == "FAILED") or (((status_response['content']|from_json)['Requests']['request_status']) == "COMPLETED"))
+  retries: 16
+  delay: 60
+
+- name: Displaying the status of Installation
+  debug:
+    msg: "DATALAKE Installation is  {{ (status_response['results'][0]['content']|from_json)['Requests']['request_status'] }}"
+ 
+- name: Displaying the status of Installation
+  fail:
+    msg="Installation DATALAKE is failed"
+  when: (status_response['results'][0]['content']|from_json)['Requests']['request_status'] == "FAILED"

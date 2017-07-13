@@ -1,0 +1,8 @@
+---
+- include_vars: ../../../vars.yaml
+
+- name: edit bashrc to add zabbix env variable
+  lineinfile:
+         dest="/etc/bashrc"
+         insertafter=EOF
+         line='export ZABBIX_ENABLED_CLUSTER=true'

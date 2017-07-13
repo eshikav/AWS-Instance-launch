@@ -1,0 +1,42 @@
+---
+- include_vars: ../../../vars.yaml
+
+- name: creating directory
+  file: path=/var/service_repo state=directory
+
+- name: copy files related to yarn service
+  get_url:
+     url: '{{ CSF_CDLK_CLUSTER_CONFIG.repo_url }}/hadoop-2.7.0.tar.gzip'
+     dest: /var/service_repo/
+
+- name: Extract yarn tar file
+  shell: tar -zxvf /var/service_repo/hadoop-2.7.0.tar.gzip -C /opt/
+
+#- name: Copy spark-shuffle jar to hadoop lib directory for NBBDS stack
+#  copy: src=../../../../../data/local_repo/spark-2.0.2-yarn-shuffle.jar dest=/opt/hadoop-2.7.0/share/hadoop/common/lib/
+#  when: CSF_BANA_distro == "AM_NBBDS"
+
+- name: copy files related to yarn service
+  get_url:
+     url: '{{ CSF_CDLK_CLUSTER_CONFIG.repo_url }}/spark-2.0.2-yarn-shuffle.jar'
+     dest: /opt/hadoop-2.7.0/share/hadoop/common/lib/
+
+#kerberos related  
+- name: Change permission for /opt/hadoop-2.7.0 folder recursively
+  file:
+   path: /opt/current/hadoop
+   owner: root
+   group: root
+   recurse: yes
+   state: directory
+   follow: yes
+  
+- name: edit line in file for yarn executor group
+  lineinfile: dest=/opt/current/hadoop/etc/hadoop/container-executor.cfg regexp='^yarn.nodemanager.linux-container-executor.group=' line='yarn.nodemanager.linux-container-executor.group=hadoop'
+
+
+- name: edit line in file for yarn executor group for banned user
+  lineinfile: dest=/opt/current/hadoop/etc/hadoop/container-executor.cfg regexp='^banned.users=' line='banned.users=bin'
+
+- name: edit line in file for yarn executor group for min.user.id, need to delete comment after 1000
+  lineinfile: dest=/opt/current/hadoop/etc/hadoop/container-executor.cfg regexp='^min.user.id=' line='min.user.id=1000'

@@ -1,0 +1,26 @@
+---
+- include_vars: ../../../vars.yaml
+
+############################ jsvc installation ###############################################
+- debug: 
+    msg: "{{ CSF_CDLK_CLUSTER_CONFIG.kerberos_enable }}"
+
+- name: copy jsvc rpm on all nodes
+  copy: src=apache-commons-daemon-jsvc-1.0.13-6.el7.x86_64.rpm dest=/tmp
+  
+- name: check jsvc rpm on all nodes
+  shell: rpm -q "apache-commons-daemon-jsvc-1.0.13-6.el7.x86_64" | grep "jsvc"
+  register: install_state
+
+#- name: install_state_value
+#  debug: var=install_state
+
+- name: install jsvc rpm if not installed
+  shell: cd /tmp; rpm -iv apache-commons-daemon-jsvc-1.0.13-6.el7.x86_64.rpm
+  when: '"not installed" in install_state.stdout'
+
+#change jsvc_path variable value to /usr/bin in all the files that contain this jsvc_path in NBBDS Stack
+- name: install krb5_workstation on all nodes
+  yum: 
+    name: krb5-workstation.x86_64
+    state: present

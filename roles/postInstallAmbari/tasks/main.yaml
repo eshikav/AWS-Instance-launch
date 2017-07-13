@@ -1,0 +1,13 @@
+---
+#- include_vars: ../../../vars.yaml
+
+- name: Creating /apps/tez directory
+  shell: su - hdfs -c 'hdfs dfs -mkdir /apps/tez'
+  ignore_errors: true
+  when: CSF_CDLK_CLUSTER_CONFIG.distro_name == 'NBBDS'
+
+- name: Putting the tez.tar.gz
+  shell: su - hdfs -c 'hdfs dfs -put /opt/apache-tez-0.8.5-bin/share/tez.tar.gz /apps/tez/'
+  ignore_errors: true
+  when: CSF_CDLK_CLUSTER_CONFIG.distro_name == 'NBBDS'
+

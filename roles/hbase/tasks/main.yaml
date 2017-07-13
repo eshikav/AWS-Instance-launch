@@ -1,0 +1,19 @@
+- name: creating directory
+  file: path=/var/service_repo state=directory
+
+#- name: copy files related to hadoop service
+#  copy: src=../../../../../data/service_repo/hbase-1.1.9-bin.tar.gz dest=/var/service_repo/
+
+- name: copy files related to hadoop service
+  get_url:
+     url: '{{ CSF_CDLK_CLUSTER_CONFIG.repo_url }}/hbase-1.1.9-bin.tar.gz'
+     dest: /var/service_repo/ 
+
+- name: Extract hdfs tar file
+  shell: tar -zxvf /var/service_repo/hbase-1.1.9-bin.tar.gz -C /opt/
+
+- name: wget pheonix tar
+  get_url:
+     url: '{{ CSF_CDLK_CLUSTER_CONFIG.repo_url }}/phoenix-4.9.0-HBase-1.1-server.jar'
+     dest: /opt/hbase-1.1.9/lib/
+

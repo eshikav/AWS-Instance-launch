@@ -1,0 +1,13 @@
+---
+- template:
+    src: keepalived_conf.j2
+    dest: /etc/keepalived/keepalived.conf
+
+- name: Getting interface name
+  shell: ip r |grep " src "|cut -d " " -f 3
+  register: enpXsY
+
+- replace:
+    dest: /etc/keepalived/keepalived.conf
+    regexp: '<enpXsY>'
+    replace: '{{ enpXsY.stdout }}'

@@ -1,0 +1,59 @@
+---
+- include_vars: ../../../../../User_Interface/{{ varsfile }}
+- name: Get the list of components installed on node
+  uri: url=http://{{ AMBARI.AMBARI_SERVER.host }}:8080/api/v1/clusters/{{ CSF_CDLK_CLUSTER_CONFIG.cluster_name }}/hosts/{{ delete_host }}
+       method=GET
+       force_basic_auth=yes
+       user=admin
+       password=admin
+       HEADER_X-Requested-By="ambari"
+       status_code=200,201,202
+       return_content=yes
+  register: result
+
+- local_action: copy content="{{ (result.content|from_json) }}" dest=/tmp/allclustercomponents.txt
+
+- name: Extract the components name from json
+  script: getcomponents.sh
+  delegate_to: 127.0.0.1
+
+- name: validating host components
+  shell: while read -r line; do name="$line";if [[ `echo "$line" | grep -i "CLIENT"` ]]; then echo "True"; else echo "False"; break; fi;  done < /tmp/components.txt
+  delegate_to: 127.0.0.1
+  register: output
+
+- name: Deleting the temperory file
+  shell: rm -rf /tmp/allclustercomponents.txt /tmp/components.txt
+  delegate_to: 127.0.0.1
+  when: output.stdout == "False"
+
+- name: Host deletion failed
+  fail:
+    msg: "This host cannot be deleted, hosts with only clients can be deleted"
+  when: output.stdout == "False"
+
+- name: Deleting the components from the node
+  uri: url=http://{{ AMBARI.AMBARI_SERVER.host }}:8080/api/v1/clusters/{{ CSF_CDLK_CLUSTER_CONFIG.cluster_name }}/hosts/{{ delete_host }}/host_components/{{ item }}
+       method=DELETE
+       force_basic_auth=yes
+       user=admin
+       password=admin
+       HEADER_X-Requested-By="ambari"
+       status_code=200,201,202
+       return_content=yes
+  with_lines: cat "/tmp/components.txt"
+
+- name: Deleting the temporary file
+  shell: rm -rf /tmp/allclustercomponents.txt /tmp/components.txt
+  delegate_to: 127.0.0.1
+  when: output.stdout == "True"
+
+- name: Deleting the node
+  uri: url=http://{{ AMBARI.AMBARI_SERVER.host }}:8080/api/v1/clusters/{{ CSF_CDLK_CLUSTER_CONFIG.cluster_name }}/hosts/{{ delete_host }}
+       method=DELETE
+       force_basic_auth=yes
+       user=admin
+       password=admin
+       HEADER_X-Requested-By="ambari"
+       status_code=200,201,202
+       return_content=yes

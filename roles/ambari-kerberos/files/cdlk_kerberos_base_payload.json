@@ -1,0 +1,11 @@
+{
+    "Clusters": {
+        "security_type": "KERBEROS"
+    },
+    "session_attributes": {
+        "kerberos_admin": {
+            "password": "root",
+            "principal": "root/admin@NOKIA.COM"
+        }
+    }
+}

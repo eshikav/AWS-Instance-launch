@@ -1,0 +1,28 @@
+---
+#- include_vars: ../../../vars.yaml
+
+#- name: stop firewalld services
+#  service: name=firewalld state=stopped
+
+- name: Installing Mariadb
+  yum: name={{ item }} state=installed
+  with_items:
+    - MariaDB-*10.1.17-1.el7.centos
+    - galera-25.3.17-1.rhel7.el7.centos
+    - jemalloc-3.6.0-1.el7
+  
+
+- name: Copying config file
+  copy: src=server.cnf dest=/etc/my.cnf.d/server.cnf
+
+- name: Editing server.cnf file
+  lineinfile: dest=/etc/my.cnf.d/server.cnf regexp=^wsrep_cluster_address line='wsrep_cluster_address="gcomm://{{  MARIADB.mariadb_allnodes|sort|join(',') }}"'
+
+- name: Getting host ip
+  shell: hostname -i
+  register: ip
+
+- name: Editing server.cnf file
+  lineinfile: dest=/etc/my.cnf.d/server.cnf regexp=^wsrep_node_address line='wsrep_node_address={{ ip.stdout }}'
+
+

@@ -1,0 +1,17 @@
+- hosts: None
+  gather_facts: no
+  tasks:
+    - yaml_update: file="/etc/ansible/group_vars/all"
+    - debug: msg="{{ item }}"
+      with_items:
+          -  "{{ CLUSTER_NODES.hosts }}"
+
+- hosts: 127.0.0.1
+  gather_facts: yes
+  tasks:
+    - include_vars: file="/etc/ansible/group_vars/all"
+    - debug: msg="{{ item }}"
+      with_items:
+          -  "{{ CLUSTER_NODES.hosts }}"
+
+

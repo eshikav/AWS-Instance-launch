@@ -1,0 +1,116 @@
+---
+- include_vars: ../../../Addhost_input.yaml
+
+- name: add the host to the cluster
+  uri: url=http://{{ AMBARI.AMBARI_SERVER.host }}:8080/api/v1/clusters/{{ CSF_CDLK_CLUSTER_CONFIG.cluster_name }}/hosts/{{ item }}
+       method=POST
+       force_basic_auth=yes
+       user=admin
+       password=admin
+       HEADER_X-Requested-By="ambari"
+       status_code=200,201,202
+      return_content=yes
+  register: req_id
+  ignore_errors: true
+  with_items:
+      - "{{ AMBARI.AMBARI_AGENT.hosts }}"
+
+- name: check if the the host is added to the cluster
+  uri: url=http://{{ AMBARI.AMBARI_SERVER.host }}:8080/api/v1/clusters/{{ CSF_CDLK_CLUSTER_CONFIG.cluster_name }}/hosts/{{ item }}
+       method=POST
+       force_basic_auth=yes
+       user=admin
+       password=admin
+       HEADER_X-Requested-By="ambari"
+       status_code=409
+      return_content=yes
+  with_items:
+      - "{{ AMBARI.AMBARI_AGENT.hosts }}"
+
+- name: add the component to the host
+  uri: url=http://{{ AMBARI.AMBARI_SERVER.host }}:8080/api/v1/clusters/{{ CSF_CDLK_CLUSTER_CONFIG.cluster_name }}/hosts/{{ item.1 }}/host_components/{{ item.0.name }}
+       method=POST
+       force_basic_auth=yes
+       user=admin
+       password=admin
+       HEADER_X-Requested-By="ambari"
+       status_code=200,201,202
+  register: add_component_id
+  ignore_errors: true
+  with_subelements:
+    - "{{ components }}"
+    - hosts
+    - flags:
+      skip_missing: True
+
+- name: check if the components are added to the host
+  uri: url=http://{{ AMBARI.AMBARI_SERVER.host }}:8080/api/v1/clusters/{{ CSF_CDLK_CLUSTER_CONFIG.cluster_name }}/hosts/{{ item.1 }}/host_components/{{ item.0.name }}
+       method=POST
+       force_basic_auth=yes
+       user=admin
+       password=admin
+       HEADER_X-Requested-By="ambari"
+       status_code=409
+  register: add_component_id
+  with_subelements:
+    - "{{ components }}"
+    - hosts
+    - flags:
+      skip_missing: True
+
+- name: install the component on the host
+  uri: url=http://{{ AMBARI.AMBARI_SERVER.host }}:8080/api/v1/clusters/{{ CSF_CDLK_CLUSTER_CONFIG.cluster_name }}/hosts/{{ item.1 }}/host_components/{{ item.0.name }}
+       method=PUT
+       force_basic_auth=yes
+       user=admin
+       password=admin
+       body=' {"RequestInfo":{"context":"Installing {{ item.0.name }}"},"Body":{"HostRoles":{"state":"INSTALLED"}}}'
+       HEADER_X-Requested-By="ambari"
+       status_code=200,201,202
+       return_content=yes
+  register: component_install
+  with_subelements:
+    - "{{ components }}"
+    - hosts
+    - flags:
+      skip_missing: True
+
+- local_action: copy content={{ component_install }} dest=/tmp/component_install.json
+
+- name: Request status check for component installation
+  script: request_id.py
+  delegate_to: 127.0.0.1
+  register: install_status
+
+- name: Displaing the install status of the components
+  debug:
+    msg: "{{ install_status.stdout_lines }}"
+
+- name: start the component on the host
+  uri: url=http://{{ AMBARI.AMBARI_SERVER.host }}:8080/api/v1/clusters/{{ CSF_CDLK_CLUSTER_CONFIG.cluster_name }}/hosts/{{ item.1 }}/host_components/{{ item.0.name }}
+       method=PUT
+       force_basic_auth=yes
+       user=admin
+       password=admin
+       body=' {"RequestInfo":{"context":"Starting {{ item.0.name }}"},"Body":{"HostRoles":{"state":"STARTED"}}}'
+       HEADER_X-Requested-By="ambari"
+       status_code=200,201,202
+       return_content=yes
+  register: component_start
+  with_subelements:
+    - "{{ components }}"
+    - hosts
+    - flags:
+      skip_missing: true
+
+- local_action: copy content={{ component_start }} dest=/tmp/component_install.json
+
+- name: Request status check for component start
+  script: request_id.py
+  delegate_to: 127.0.0.1
+  register: start_status
+
+- name: Displaying the start status of the components
+  debug:
+    msg: "{{ start_status.stdout_lines }}"
+

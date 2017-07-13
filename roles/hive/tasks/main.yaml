@@ -1,0 +1,16 @@
+- name: creating directory
+  file: path=/var/service_repo state=directory
+
+#- name: copy files related to Hive
+#  copy: src=../../../../../data/service_repo/apache-hive-1.2.1-bin.tar.gzip dest=/var/service_repo/
+
+- name: copy files related to Hive
+  get_url:
+     url: '{{ CSF_CDLK_CLUSTER_CONFIG.repo_url }}/apache-hive-1.2.1-bin.tar.gzip'
+     dest: /var/service_repo/
+
+- name: Extract hive tar file
+  shell: tar -zxvf /var/service_repo/apache-hive-1.2.1-bin.tar.gzip -C /opt/
+
+- name: creating softlink
+  file: src=/opt/apache-hive-1.2.1-bin/ dest=/usr/lib/hive state=link

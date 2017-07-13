@@ -1,0 +1,14 @@
+- hosts: 127.0.0.1
+  tasks:
+    - name: example3 ec2 key
+      ec2_key:
+        name: mykey
+        key_material: "{{ item }}"
+      with_file: 
+         - /root/.ssh/id_rsa.pub 
+      register: ec2_key
+      environment:
+         - http_proxy: "http://135.245.115.123:8000"
+         - https_proxy: "https://135.245.115.123:8000"
+    - debug: msg="{{ ec2_key.results[0]['key']['private_key'] }}"
+

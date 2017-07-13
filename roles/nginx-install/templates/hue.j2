@@ -1,0 +1,30 @@
+server {
+    server_name localhost;
+    charset utf-8;
+
+    listen {{ NGINX.NGINX_LOAD_BALANCER.hue_port }};
+
+    # Or if running hue on https://
+    ## listen 8002 ssl;
+    ## ssl_certificate /path/to/ssl/cert;
+    ## ssl_certificate_key /path/to/ssl/key;
+
+    client_max_body_size 0;
+    location / {
+        proxy_pass http://hue;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+
+        # Or if the upstream Hue instances are running behind https://
+        ## proxy_pass https://hue;
+    }
+
+}
+
+upstream hue {
+    ip_hash;
+
+    # List all the Hue instances here for high availability.
+    server <HueServer0>:8888 max_fails=3;
+    server <HueServer1>:8888 max_fails=3;
+}

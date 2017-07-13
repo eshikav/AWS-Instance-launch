@@ -1,0 +1,65 @@
+#!/usr/bin/python
+import json
+from copy import deepcopy
+from tabulate import tabulate
+import argparse
+import sys
+
+file2=open('/root/aws_nodes.json','r')
+json_file=json.load(file2)
+
+class aws_out(object):
+    def __init__(self):
+        parser = argparse.ArgumentParser(description='aws cloud instances',usage="aws_info <command> [<args>]")
+        parser.add_argument('command', help='Subcommand to run')
+        args=parser.parse_args(sys.argv[1:2])
+        if not hasattr(self, args.command):
+            print 'Unrecognized command'
+            parser.print_help()
+            exit(1)
+        getattr(self, args.command)()
+
+    def get_nodes(self):
+        result=[]
+        for stuff in json_file['aws_data']:
+            result.append(stuff['instances'][0]['tags']['Name'])
+        return result
+
+    def info(self):
+        print tabulate([[i] for i in self.get_nodes()],["Nodes-deployed"],tablefmt="grid")
+
+
+    def show(self):
+        parser = argparse.ArgumentParser(description='Show instance information')
+        parser.add_argument('nodename')
+        args = parser.parse_args(sys.argv[2:])
+        if  args.nodename not in self.get_nodes():
+            print "unable to find the node info"
+            sys.exit(10)
+        else:
+            for stuff in json_file['aws_data']:
+                if stuff['instances'][0]['tags']['Name'] == args.nodename:
+                    print tabulate([[key,stuff['instances'][0][key]] for key in stuff['instances'][0]],['Property','Value'],tablefmt="grid")
+    
+    def volume_show(self):
+        parser = argparse.ArgumentParser(description='Show instance volume information')
+        parser.add_argument('nodename')
+        args = parser.parse_args(sys.argv[2:])
+        if  args.nodename not in self.get_nodes():
+            print "unable to find the node info"
+            sys.exit(10)
+        else:
+            for stuff in json_file['aws_data']:
+               if stuff['instances'][0]['tags']['Name'] == args.nodename:
+                   data=stuff['instances'][0]['block_device_mapping']
+                   body=[[key,data[key]['volume_id'],data[key]['status'],data[key]['delete_on_termination']] for key in data]
+                   head=["Device","Volume-ID","Status","Delete-On-Termination"]
+                   print tabulate(body,head,tablefmt="grid")
+                    
+        
+if __name__ == '__main__':
+    aws_out()
+
+
+#data,head=info()
+#print tabulate(data,head,tablefmt="grid")

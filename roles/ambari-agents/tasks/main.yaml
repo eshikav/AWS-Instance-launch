@@ -1,0 +1,22 @@
+---
+#- include_vars: ../../../{{ varsfile }}
+
+- name: Installing wget packages
+  yum: name={{ item }} state=present
+  with_items:
+    - wget
+
+- name: creating directory
+  file: path=/var/service_repo state=directory
+
+- name: Install Ambari Agent
+  yum: name=ambari-agent state=installed
+  
+- name: Configuring ambari-agent to start on reboot
+  shell: chkconfig ambari-agent on
+
+- name: Configure Ambari agent to register at Ambari server
+  lineinfile: dest=/etc/ambari-agent/conf/ambari-agent.ini create=no state=present regexp='hostname=.*' line='hostname={{ AMBARI.AMBARI_SERVER.host }}'
+
+- name: start ambari agent
+  service: name=ambari-agent state=restarted enabled=yes

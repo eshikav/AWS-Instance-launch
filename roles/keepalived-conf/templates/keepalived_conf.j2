@@ -1,0 +1,46 @@
+! Configuration File for keepalived
+vrrp_script chk_mysql {
+    script "/usr/sbin/keepalived_scripts/keepalived_chk_script.sh"
+    interval 2   # check every 2 seconds
+    fall 2       # require 2 failures for KO
+    rise 2       # require 2 successes for OK
+}
+
+{% if CSF_CDLK_CLUSTER_CONFIG.distro_name == 'CDH' and CSF_CDLK_CLUSTER_CONFIG.nginx_enable %}
+vrrp_script chk_nginx {
+    script "/usr/bin/killall -0 nginx"
+    interval 2
+    fall 2
+    rise 2
+    weight 50
+}
+
+
+vrrp_instance VI_1 {
+    interface <enpXsY>
+    priority 101
+    
+    virtual_router_id {{ VIP[NGINX.NGINX_LOAD_BALANCER.nginx_vip].vip_id }}
+    virtual_ipaddress {
+        {{ VIP[NGINX.NGINX_LOAD_BALANCER.nginx_vip].ip }}
+    }
+    track_script {
+        chk_nginx
+    }
+}
+{% endif %}
+
+vrrp_instance VI_2 {
+    interface <enpXsY>
+    state MASTER
+    priority 150
+
+    virtual_router_id {{ VIP[MARIADB.mariadb_vip].vip_id }}
+    virtual_ipaddress {
+      {{ VIP[MARIADB.mariadb_vip].ip }} 
+    }
+    track_script {
+      chk_mysql
+    }
+}
+

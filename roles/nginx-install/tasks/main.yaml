@@ -1,0 +1,61 @@
+---
+#- include_vars: ../../../vars.yaml
+
+- name: Installing NGINX server
+  yum: name=citm-nginx state=installed
+
+- name: Configuring NGINX to start on reboot
+  shell: systemctl enable nginx
+
+- name: Taking backup of nginx.conf
+  command: mv /etc/nginx/nginx.conf /etc/nginx/nginx.conf.backup
+
+- name: Taking backup of default.conf
+  command: mv /etc/nginx/conf.d/default.conf /etc/nginx/conf.d/default.conf.backup
+
+- name: Copying the customized nginx.conf file for nginx
+  copy:
+    src: "../files/nginx.conf"
+    dest: "/etc/nginx/nginx.conf"
+
+# Copying and modifying the customized nginx conf file for oozie
+- template:
+    src: "oozie.j2"
+    dest: "/etc/nginx/conf.d/oozie.conf"
+
+- replace:
+        dest: /etc/nginx/conf.d/oozie.conf
+        regexp: '<OozieServer0>'
+        replace: "{{ item.components[0].hosts[0] }}"
+  when:
+    - (item.NAME=='OOZIE')
+  with_items: DATALAKE.SERVICES
+
+- replace:
+        dest: /etc/nginx/conf.d/oozie.conf
+        regexp: '<OozieServer1>'
+        replace: "{{ item.components[0].hosts[1] }}"
+  when:
+    - (item.NAME=='OOZIE')
+  with_items: DATALAKE.SERVICES
+
+# Copying and modifying the customized nginx conf file for hue
+- template:
+    src: "hue.j2"
+    dest: "/etc/nginx/conf.d/hue.conf"
+
+- replace:
+        dest: /etc/nginx/conf.d/hue.conf
+        regexp: '<HueServer0>'
+        replace: "{{ item.components[0].hosts[0] }}"
+  when:
+    - (item.NAME=='HUE')
+  with_items: DATALAKE.SERVICES
+
+- replace:
+        dest: /etc/nginx/conf.d/hue.conf
+        regexp: '<HueServer1>'
+        replace: "{{ item.components[0].hosts[1] }}"
+  when:
+    - (item.NAME=='HUE')
+  with_items: DATALAKE.SERVICES

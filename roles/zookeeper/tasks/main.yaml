@@ -1,0 +1,11 @@
+- name: creating directory
+  file: path=/var/service_repo state=directory
+
+
+- name: copy files related to zookeeper service
+  get_url:
+     url: '{{ CSF_CDLK_CLUSTER_CONFIG.repo_url }}/zookeeper-3.4.6.tar.gzip'
+     dest: /var/service_repo/
+
+- name: Extract zookeeper tar file
+  shell: tar -zxvf /var/service_repo/zookeeper-3.4.6.tar.gzip -C /opt/

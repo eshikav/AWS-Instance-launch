@@ -1,0 +1,23 @@
+---
+#- include_vars: ../../../vars.yaml
+
+- name: Installing ambari server
+  yum: name=keepalived state=installed
+  
+- name: Configuring keepalived to start on reboot
+  shell: systemctl enable keepalived
+
+- name: creating keepalived_scripts folder
+  file: path=/usr/sbin/keepalived_scripts state=directory
+
+- name: Copying keepalived files
+  copy: src=keepalived_chk_script.sh  dest=/usr/sbin/keepalived_scripts/
+
+- name: Copying keepalived files
+  copy: src=mysql_chk_script.py  dest=/usr/sbin/keepalived_scripts/
+
+- name: Adding permissions keepalived files
+  shell: chmod 755 /usr/sbin/keepalived_scripts/keepalived_chk_script.sh
+
+- name: Adding permissions keepalived files
+  shell: chmod 755 /usr/sbin/keepalived_scripts/mysql_chk_script.py

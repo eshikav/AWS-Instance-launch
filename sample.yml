@@ -1,0 +1,9 @@
+- hosts: 127.0.0.1
+  gather_facts: no
+  tasks:
+      - name: custom
+        debug: msg="{{ item }}"
+        with_getnodes: type="aws_instance" profile="namenode,datanode" property="public_ip"
+        register: out
+      - debug: msg={{ out }}
+      - local_action: template src=hosts.tmp dest=/etc/hosts

@@ -1,0 +1,30 @@
+{
+    "blueprint": "NOKIACLUSTER_blueprint",
+    "default_password": "nokia",
+    "host_groups": [
+        {
+            "hosts": [
+                {
+                    "fqdn": "host-10-197-53-90.nokia.com"
+                }
+            ],
+            "name": "host_group_0"
+        },
+        {
+            "hosts": [
+                {
+                    "fqdn": "host-10-197-53-91.nokia.com"
+                }
+            ],
+            "name": "host_group_1"
+        },
+        {
+            "hosts": [
+                {
+                    "fqdn": "host-10-197-53-92.nokia.com"
+                }
+            ],
+            "name": "host_group_2"
+        }
+    ]
+}

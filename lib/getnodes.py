@@ -79,8 +79,9 @@ class LookupModule(LookupModule):
             node_list=(self.expandregex(node_name['name']))
             for node in node_list:
                 tmp={}
-                tmp[self.property]=self.get_node_details(node,self.property)
-                tmp["profile"]=prof
+                tmp[self.property] = self.get_node_details(node,self.property)
+                tmp["profile"] = prof
+                tmp["name"] = node
                 result.append(deepcopy(tmp))                
         return result
             

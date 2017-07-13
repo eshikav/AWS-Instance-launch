@@ -1,0 +1,115 @@
+---
+- include_vars: ../../../vars.yaml
+
+- name: Copying my.cnf file
+  copy: src=my.cnf dest=/etc/my.cnf
+
+- name: Show databases
+  shell: mysql -uroot -p{{ CRED_BUNDLE[MARIADB.login_cred].passwd }} -e 'show databases' >> /dev/zzz 2>&1
+  register: result1
+  ignore_errors: True
+
+- name: Execcute if the previous command did not succeed
+  shell: sleep 15;mysql -u root -e "grant all privileges on *.* to root@'localhost' identified by '{{ CRED_BUNDLE[MARIADB.login_cred].passwd }}';flush privileges;"
+  when: result1|failed
+
+- name: Grant root privilleges
+  shell: mysql -uroot -p{{ CRED_BUNDLE[MARIADB.login_cred].passwd }} -e "grant all privileges on *.* to root@'{{ AMBARI.AMBARI_SERVER.host }}' identified by '{{ CRED_BUNDLE[MARIADB.login_cred].passwd }}';flush privileges;"
+
+- name: Set root password
+  shell: mysql -u root --password='{{ CRED_BUNDLE[MARIADB.login_cred].passwd }}' -e "UPDATE mysql.user SET Password=PASSWORD('{{ CRED_BUNDLE[MARIADB.login_cred].passwd }}') WHERE User='root';FLUSH PRIVILEGES;"
+
+- name: Grant all hosts root privilleges
+  shell: mysql -u root  -p{{ CRED_BUNDLE[MARIADB.login_cred].passwd }} -e "grant all privileges on *.* to 'root'@'%' identified by '{{ CRED_BUNDLE[MARIADB.login_cred].passwd }}';flush privileges;"
+
+- name: Creating Ambari accounts in DB
+  shell: mysql -u root  -p{{ CRED_BUNDLE[MARIADB.login_cred].passwd }}  -e "CREATE USER IF NOT EXISTS '{{ CRED_BUNDLE[AMBARI.AMBARI_SERVER.login_cred].username }}'@'%' IDENTIFIED BY '{{ CRED_BUNDLE[AMBARI.AMBARI_SERVER.login_cred].passwd }}';GRANT ALL PRIVILEGES ON *.* TO '{{ CRED_BUNDLE[AMBARI.AMBARI_SERVER.login_cred].username }}'@'%';"
+
+- name: Creating Ambari accounts in DB
+  shell: mysql -u root  -p{{ CRED_BUNDLE[MARIADB.login_cred].passwd }}  -e "CREATE USER  IF NOT EXISTS '{{ CRED_BUNDLE[AMBARI.AMBARI_SERVER.db_CRED_BUNDLE].username }}'@'localhost' IDENTIFIED BY '{{ CRED_BUNDLE[AMBARI.AMBARI_SERVER.db_CRED_BUNDLE].passwd }}';GRANT ALL PRIVILEGES ON *.* TO '{{ CRED_BUNDLE[AMBARI.AMBARI_SERVER.login_cred].username }}'@'localhost';"
+
+- name: Creating Ambari accounts in DB
+  shell: mysql -u root  -p{{ CRED_BUNDLE[MARIADB.login_cred].passwd }}  -e "CREATE USER IF NOT EXISTS '{{ CRED_BUNDLE[AMBARI.AMBARI_SERVER.db_CRED_BUNDLE].username }}'@'{{ am_server_host }}' IDENTIFIED BY '{{ CRED_BUNDLE[AMBARI.AMBARI_SERVER.db_CRED_BUNDLE].passwd }}';GRANT ALL PRIVILEGES ON *.* TO '{{ CRED_BUNDLE[AMBARI.AMBARI_SERVER.db_CRED_BUNDLE].username }}'@'{{ am_server_host }}';FLUSH PRIVILEGES;"
+
+
+- name: Creating hivedb database
+  shell: mysql -u{{ CRED_BUNDLE[AMBARI.AMBARI_SERVER.db_CRED_BUNDLE].username }}  -p{{ CRED_BUNDLE[AMBARI.AMBARI_SERVER.db_CRED_BUNDLE].passwd }} -e "CREATE DATABASE IF NOT EXISTS {{ item.hive_db_name }};"
+  when:
+    - (item.servicename=='HIVE')
+    - (item.hive_db_name is defined)
+    - (CRED_BUNDLE[item.CRED_BUNDLE].passwd != "")
+    - (item.hive_db_name != "")
+  with_items: DATALAKE
+
+- name: Creating hive user
+  shell: mysql -u root  -p{{ CRED_BUNDLE[MARIADB.login_cred].passwd }}  -e "USE {{ item.hive_db_name }};CREATE USER IF NOT EXISTS 'hive'@'localhost' IDENTIFIED BY '{{ CRED_BUNDLE[item.CRED_BUNDLE].passwd }}';GRANT ALL PRIVILEGES ON *.* TO 'hive'@'localhost';"
+  when:
+    - (item.servicename=='HIVE')
+    - (item.hive_db_name is defined)
+    - (CRED_BUNDLE[item.CRED_BUNDLE].passwd != "")
+    - (item.hive_db_name != "")
+  with_items: DATALAKE
+
+- name: Creating hive user
+  shell: mysql -u root  -p{{ CRED_BUNDLE[MARIADB.login_cred].passwd }}  -e "USE {{ item.hive_db_name }};CREATE USER IF NOT EXISTS 'hive'@'{{ Mariadb.mariadb_master }}' IDENTIFIED BY '{{ CRED_BUNDLE[item.CRED_BUNDLE].passwd }}';GRANT ALL PRIVILEGES ON *.* TO 'hive'@'{{ Mariadb.mariadb_master }}';"
+  when:
+    - (item.servicename=='HIVE')
+    - (item.hive_db_name is defined)
+    - (CRED_BUNDLE[item.CRED_BUNDLE].passwd != "")
+    - (item.hive_db_name != "")
+  with_items: DATALAKE
+
+- name: Creating hive user
+  shell: mysql -u root  -p{{ CRED_BUNDLE[MARIADB.login_cred].passwd }}  -e "USE {{ item.hive_db_name }};CREATE USER IF NOT EXISTS 'hive'@'%' IDENTIFIED BY '{{ CRED_BUNDLE[item.CRED_BUNDLE].passwd }}';GRANT ALL PRIVILEGES ON *.* TO 'hive'@'%';FLUSH PRIVILEGES;"
+  when:
+    - (item.servicename=='HIVE')
+    - (item.hive_db_name is defined)
+    - (CRED_BUNDLE[item.CRED_BUNDLE].passwd != "")
+    - (item.hive_db_name != "")
+  with_items: DATALAKE
+
+- block:
+    - name: Creating ooziedb database
+      shell: mysql -u root  -p{{ CRED_BUNDLE[MARIADB.login_cred].passwd }} -e "CREATE DATABASE IF NOT EXISTS {{ ooziedb_name }};"
+
+    - name: Creating oozie user
+      shell: mysql -u root  -p{{ CRED_BUNDLE[MARIADB.login_cred].passwd }}  -e "USE {{ ooziedb_name }};CREATE USER IF NOT EXISTS 'oozie'@'localhost' IDENTIFIED BY '{{ ooziedb_password }}';GRANT ALL PRIVILEGES ON *.* TO 'oozie'@'localhost';"
+
+    - name: Creating oozie user
+      shell: mysql -u root  -p{{ CRED_BUNDLE[MARIADB.login_cred].passwd }}  -e "USE {{ ooziedb_name }};CREATE USER IF NOT EXISTS 'oozie'@'{{ Mariadb.mariadb_master }}' IDENTIFIED BY '{{ ooziedb_password }}';GRANT ALL PRIVILEGES ON *.* TO 'oozie'@'{{ Mariadb.mariadb_master }}';"
+
+  when:
+    - (ooziedb_name is defined)
+    - (ooziedb_password is defined)
+    - (ooziedb_name != "")
+    - (ooziedb_password != "")
+    - (CSF_BANA_distro == "AM_CDH")
+
+- block:
+
+    - name: Creating Hue db
+      shell: mysql -u{{ CRED_BUNDLE[AMBARI.AMBARI_SERVER.db_CRED_BUNDLE].username }}  -p{{ CRED_BUNDLE[AMBARI.AMBARI_SERVER.db_CRED_BUNDLE].passwd }} -e "CREATE DATABASE IF NOT EXISTS {{ huedb_name }};"
+
+
+    - name: Creating hue user
+      shell: mysql -u root  -p{{ CRED_BUNDLE[MARIADB.login_cred].passwd }}  -e "USE {{ huedb_name }};CREATE USER IF NOT EXISTS 'hue'@'localhost' IDENTIFIED BY '{{ huedb_password }}';GRANT ALL PRIVILEGES ON *.* TO 'hue'@'localhost';"
+
+
+    - name: Creating hue user
+      shell: mysql -u root  -p{{ CRED_BUNDLE[MARIADB.login_cred].passwd }}  -e "USE {{ huedb_name }};CREATE USER IF NOT EXISTS 'hue'@'{{ Mariadb.mariadb_master }}' IDENTIFIED BY '{{ huedb_password }}';GRANT ALL PRIVILEGES ON *.* TO 'hue'@'{{ Mariadb.mariadb_master }}';"
+
+
+    - name: Creating hue user
+      shell: mysql -u root  -p{{ CRED_BUNDLE[MARIADB.login_cred].passwd }}  -e "USE {{ huedb_name }};CREATE USER IF NOT EXISTS 'hue'@'%' IDENTIFIED BY '{{ huedb_password }}';GRANT ALL PRIVILEGES ON *.* TO 'hue'@'%';FLUSH PRIVILEGES;"
+
+    - name: Creating hue user
+      shell: mysql -u root  -p{{ CRED_BUNDLE[MARIADB.login_cred].passwd }}  -e "USE {{ huedb_name }};CREATE USER IF NOT EXISTS 'hue'@'%' IDENTIFIED BY '{{ huedb_password }}';GRANT ALL PRIVILEGES ON *.* TO 'hue'@'%';FLUSH PRIVILEGES;"
+
+  when:
+    - (huedb_name is defined)
+    - (huedb_password is defined)
+    - (huedb_name != "")
+    - (huedb_password != "")
+    - (CSF_BANA_distro == "AM_CDH")
+
+

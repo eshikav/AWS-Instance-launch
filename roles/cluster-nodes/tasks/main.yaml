@@ -1,0 +1,22 @@
+---
+- include_vars: ../../../Addhost_input.yaml
+
+
+- name: Getting the registered nodes from the cluster
+  uri: url=http://{{ AMBARI.AMBARI_SERVER.host }}:8080/api/v1/hosts
+       method=GET
+       force_basic_auth=yes
+       user=admin
+       password=admin
+       HEADER_X-Requested-By="ambari"
+       status_code=200,201,202
+       return_content=yes
+  register: response
+
+- local_action: copy content="{{ (response.content|from_json) }}" dest=/tmp/allclusternodes.json
+
+- name: generating cluster_allnodes variable
+  script: clusternodes.py
+  delegate_to: 127.0.0.1
+
+

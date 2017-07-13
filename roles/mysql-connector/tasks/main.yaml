@@ -1,0 +1,22 @@
+---
+#- include_vars: ../../../vars.yaml
+
+- name: creating directory
+  file: path=/var/temp state=directory
+
+- name: Downloading Database Connector tar
+  get_url:
+    url: '{{ CSF_CDLK_CLUSTER_CONFIG.repo_url }}/mysql-connector-java-5.1.39.tar.gz'
+    dest: '/var/temp'
+
+- name: Unzip Database Connector pkg
+  shell: tar -zxvf /var/temp/mysql-connector-java-5.1.39.tar.gz -C /var/temp
+
+- name: Copying jar files
+  shell: cp /var/temp/mysql-connector-java-5.1.39/mysql-connector-java-5.1.39-bin.jar /usr/share/java/
+
+- name: creating softlink
+  shell: 'ln -s -f /usr/share/java/mysql-connector-java-5.1.39-bin.jar /usr/share/java/mysql-connector-java.jar'
+
+- name: Removing tmp directory
+  shell: rm -rf /var/temp

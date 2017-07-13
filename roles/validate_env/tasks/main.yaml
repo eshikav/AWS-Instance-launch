@@ -1,0 +1,64 @@
+---
+#- include_vars: ../../../{{ varsfile }}
+
+- copy: src=ssh_check.py dest=/tmp
+
+- name: checking for ssh
+  command: python /tmp/ssh_check.py {{ CLUSTER_NODES.hosts|sort|join(' ') }}
+  async: 20
+  poll: 2
+  register: x
+  ignore_errors: yes
+
+
+- name: check if rc = 1 throw an error
+  fail: msg="internode ssh failed"
+  when: x | failed
+
+
+#############  Java Version Check ##############
+
+- name: Fetch Java version
+  shell: java -version 2>&1 | grep version | awk '{print $3}' | sed 's/"//g'
+  register: java_version
+
+
+- assert:
+   that:
+    - java_version.stdout | version_compare('1.8', '>=')
+
+############ JAVA_HOME environment variable is set #########################
+#- name: JAVA_HOME verification
+#  fail: msg="JAVA_HOME environment variable is not set"
+#  when: ansible_env.JAVA_HOME is not defined
+
+
+############ SELinux Disabled Check #############
+- name: Checking selinux status on host
+  shell: getenforce
+  register: selinux
+
+- name: verifying selinux status
+  fail: msg="Disable the selinux and REBOOT the system"
+  when: selinux.stdout != "Disabled"
+########### checking if "vm.swappiness=0" in /etc/sysctl.conf  ########
+
+- name: open /etc/sysctl.conf
+  shell: cat /etc/sysctl.conf | grep 'vm.swappiness[[:space:]]*=[[:space:]]*0' /etc/sysctl.conf
+  register: swp
+
+- name: check if rc = 1 throw an error
+  fail: msg="vm.swappiness is not equal to zero"
+  when: swp.rc == 1
+
+############ validating pre installation configuration (sys/kernel) and writing to /sys/kernel/mm/transparent_hugepage/defrag if not available #############
+
+   #- name: checking pre installation configuration (sys/kernel)
+   #  shell: cat /etc/rc.local | grep 'never > /sys/kernel/mm/transparent_hugepage/defrag'
+   #  register: var
+
+   #- name: check if rc = 1 throw an error
+   #  fail: msg="check in /etc/rc.local"
+   #  when: var.rc == 1
+
+

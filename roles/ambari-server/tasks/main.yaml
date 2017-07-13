@@ -1,0 +1,70 @@
+---
+#- include_vars: ../../../vars.yaml
+
+- name: Installing ambari server
+  yum: name={{ item }} state=installed
+  with_items:
+    - ambari-server
+    - ambari-agent
+    - mariadb
+
+- name: Configuring ambari-server to start on reboot
+  shell: chkconfig ambari-server on
+
+- name: Configuring ambari-agent to start on reboot
+  shell: chkconfig ambari-agent on
+
+- name: pre-loading the Ambari database schema
+  shell: mysql  -h{{ MARIADB.mariadb_master }} -u{{ VAULT_CRED_BUNDLE[AMBARI.AMBARI_SERVER.login_cred].vault_username }}  -p{{ VAULT_CRED_BUNDLE[AMBARI.AMBARI_SERVER.login_cred].vault_passwd }} -e "CREATE DATABASE IF NOT EXISTS {{ AMBARI.AMBARI_SERVER.ambari_db_name }};USE {{ AMBARI.AMBARI_SERVER.ambari_db_name }};SOURCE /var/lib/ambari-server/resources/Ambari-DDL-MySQL-CREATE.sql;"
+  no_log: True
+
+- name: Setup ambari sever
+  shell: ambari-server setup -j {{ ansible_env.JAVA_HOME }} -s --database=mysql --databasehost={{ MARIADB.mariadb_master }} --databaseport=3306 --databasename={{ AMBARI.AMBARI_SERVER.ambari_db_name }} --databaseusername={{ VAULT_CRED_BUNDLE[AMBARI.AMBARI_SERVER.login_cred].vault_username }} --databasepassword={{ VAULT_CRED_BUNDLE[AMBARI.AMBARI_SERVER.login_cred].vault_passwd }}
+  no_log: True
+
+- name: setting ambari server
+  shell: ambari-server setup --jdbc-db=mysql --jdbc-driver=/usr/share/java/mysql-connector-java.jar
+
+- name: start ambari server
+  service: name=ambari-server state=restarted enabled=yes
+
+- name : checking for ambari-server
+  wait_for : host={{ AMBARI.AMBARI_SERVER.host }} port=8080 delay=10
+
+- name: changing ambari server HDP repo to point to local repo rather than public repo for HDP-2.4
+  vars:
+   temp1:
+    Repositories:
+      base_url: "{{CSF_CDLK_CLUSTER_CONFIG.repo_url}}"
+      verify_base_url: true
+  uri:
+   url: http://{{AMBARI.AMBARI_SERVER.host}}:8080/api/v1/stacks/NBBDS/versions/0.1/operating_systems/redhat7/repositories/HDP-2.4
+   method: PUT
+   force_basic_auth: yes
+   user: "admin"
+   password: "admin"
+   body:  ' {{temp1|to_json}}'
+   headers:
+    X-Requested-By: "ambari"
+   status_code: 200,201,202
+  when: CSF_CDLK_CLUSTER_CONFIG.distro_name == 'NBBDS'
+
+- name: changing ambari server HDP-UTILS repo to point to local repo rather than public repo for HDP-UTILS
+  vars:
+   temp2:
+    Repositories:
+      base_url: "{{CSF_CDLK_CLUSTER_CONFIG.repo_url}}"
+      verify_base_url: true
+  uri:
+   url: http://{{AMBARI.AMBARI_SERVER.host}}:8080/api/v1/stacks/NBBDS/versions/0.1/operating_systems/redhat7/repositories/HDP-UTILS-1.1.0.20
+   method: PUT
+   force_basic_auth: yes
+   user: "admin"
+   password: "admin"
+   body:  ' {{temp2|to_json}}'
+   headers:
+    X-Requested-By: "ambari"
+   status_code: 200,201,202
+  when: CSF_CDLK_CLUSTER_CONFIG.distro_name == 'NBBDS'
+
+

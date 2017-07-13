@@ -1,0 +1,42 @@
+---
+#- include_vars: ../../../vars.yaml
+
+- name: creating directory
+  file: path=/var/service_repo state=directory
+
+#- name: copy files related to hadoop service
+# copy: src=../../../../../data/service_repo/hadoop-2.7.0.tar.gzip dest=/var/service_repo/
+
+- name: copy files related to hadoop service
+  get_url:
+     url: '{{ CSF_CDLK_CLUSTER_CONFIG.repo_url }}/hadoop-2.7.0.tar.gzip'
+     dest: /var/service_repo/
+
+- name: Extract hdfs tar file
+  shell: tar -zxvf /var/service_repo/hadoop-2.7.0.tar.gzip -C /opt/
+
+- name: Creates directory
+  file: path=/opt/current state=directory
+
+- name: creating softlink
+  file: src=/opt/hadoop-2.7.0/ dest=/opt/current/hadoop state=link
+
+#kerberos related  
+- name: Change permission for /opt/hadoop-2.7.0 folder recursively
+  file:
+   path: /opt/current/hadoop
+   owner: root
+   group: root
+   recurse: yes
+   state: directory
+   follow: yes
+  
+- name: edit line in file for yarn executor group
+  lineinfile: dest=/opt/current/hadoop/etc/hadoop/container-executor.cfg regexp='^yarn.nodemanager.linux-container-executor.group=' line='yarn.nodemanager.linux-container-executor.group=hadoop'
+
+
+- name: edit line in file for yarn executor group for banned user
+  lineinfile: dest=/opt/current/hadoop/etc/hadoop/container-executor.cfg regexp='^banned.users=' line='banned.users=bin'
+
+- name: edit line in file for yarn executor group for min.user.id, need to delete comment after 1000
+  lineinfile: dest=/opt/current/hadoop/etc/hadoop/container-executor.cfg regexp='^min.user.id=' line='min.user.id=1000'

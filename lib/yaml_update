@@ -1,0 +1,57 @@
+#!/usr/bin/python
+
+# import some python modules that we'll use.  These are all
+# available in Python's core
+from ansible.module_utils.basic import AnsibleModule
+from ansible.getnodes import LookupModule
+from ansible.yaml_operations import yaml_operations
+import yaml
+from copy import deepcopy
+import sys
+import ConfigParser
+
+module = AnsibleModule(
+     argument_spec = dict(
+         file=dict(required=True)
+             )
+          )
+filepath=module.params['file']
+
+obj=LookupModule()
+nodes_info=deepcopy(obj.get_nodes())
+
+if nodes_info == "None":
+    module.fail_json(msg="failed to retrieve the nodes information")
+    sys.exit(10)
+
+yaml_obj = yaml_operations(file=filepath)
+Yaml_Data=yaml_obj.yaml_read()
+distro = Yaml_Data['CSF_CDLK_CLUSTER_CONFIG']['distro_name']
+service_list = Yaml_Data['DATALAKE'][distro+'_STACK'][distro.lower()+'_NAME_list']
+
+for element in Yaml_Data:
+    if element == "CLUSTER_NODES":
+        Yaml_Data[element]['hosts'] = nodes_info
+
+for service in service_list:
+   for index,sub_service in  enumerate(Yaml_Data['DATALAKE']['SERVICES']):
+       if service == sub_service['NAME']:
+           config = ConfigParser.RawConfigParser()
+           config.read('/root/sample.ini')
+           sub_items = config.items(service)
+           dict = {}
+           for key,value in sub_items:
+               if value == "all":
+                   dict[key] = deepcopy(nodes_info)
+               else:
+                   dict[key] = value.split(',')
+           for i in dict.keys():
+               for index2,item2 in enumerate(sub_service['components']):
+                   if i == item2['name'].lower():
+                       Yaml_Data['DATALAKE']['SERVICES'][index]['components'][index2]['hosts'] = dict[i] 
+                       
+yaml_obj = yaml_operations(filepath,Yaml_Data)
+yaml_obj.yaml_write()
+
+module.exit_json(msg="Successfully updated the yaml file",changed=True)
+

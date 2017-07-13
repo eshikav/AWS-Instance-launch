@@ -1,10 +1,10 @@
 - hosts: 127.0.0.1
+  gather_facts: false
   vars:
     proxy_env:
       http_proxy: "{{ lookup('ini', 'http_proxy section=default file=/root/sample.ini') }}"
       https_proxy: "{{ lookup('ini', 'https_proxy section=default file=/root/sample.ini') }}"
   tasks:
-
 #Creating the Keys required 
     - name: Creating the required keys
       ec2_key:
@@ -17,6 +17,7 @@
 
 
 # Spinning up of the required Instances in the cloud
+
     - name: Spinning up the required instancs
       ec2:
         id: "{{ item.name }}"
@@ -30,29 +31,239 @@
         vpc_subnet_id: "{{ item.vpc_subnet_id }}"
         region: "{{ item.region }}"
         volumes: "{{ item.volumes }}"
-      with_configread: type=aws_instance profile="datanode,namenode" number=10
+      with_configread: type=aws_instance profile="namenode" number=10
       register: awsout
       environment: "{{proxy_env}}"
 
 # Capturing the the data to a Json file
+
     - name: Capturing the data of the Volumes
       json_create: file=/root/aws_nodes.json data={{ awsout.results }}
 
-
 # Creating the Dynamic inventory
     - name: Generating the Dynamic invntory
-      add_host: name={{ item.public_ip }} groups={{ item.profile }}
-      with_getnodes: type="aws_instance" profile="namenode,datanode" property="public_ip"
+      add_host: name={{ item.name }} group=cluster
+      with_getnodes: type="aws_instance" profile="namenode" property="public_ip"
 
-- hosts: namenode
-  remote_user: ec2-user
-  tasks:
-      - name: Executing the uname
-        shell: uname -a
+    - name: Generating the Dynamic invntory
+      debug: msg={{ item }}
+      with_getnodes: type="aws_instance" profile="namenode" property="public_ip"
+      register: dynamicinventoryout
+     
+    - local_action: template src=hosts.j2 dest=/etc/hosts
 
-- hosts: datanode
+    - name: Updating the hosts information in the variables file
+      yaml_update: file="/etc/ansible/group_vars/all"
+
+- hosts: cluster
   remote_user: ec2-user
+  become: true
+  roles:
+      - set-environment
+  tags:
+      - environment-setup
+
+- hosts: "{{ lookup('ini', 'ambari_agent section=role-mappings file=/root/sample.ini') }}"
+  remote_user: ec2-user
+  become: true
+  pre_tasks:
+      - include_vars: file="/etc/ansible/group_vars/all"
+  roles:
+      -  { role: validate_env, tags: "validate_env" }
+      -  { role: pre-requisites, tags: "pre-req" }
+
+#- hosts: "{{ lookup('ini', 'hdfs section=role-mappings file=/root/sample.ini') }}"
+#  remote_user: ec2-user
+#  become: true
+#  pre_tasks:
+#      - include_vars: file="/etc/ansible/group_vars/all"
+#  roles:
+#      - { role: hdfs, when: CSF_CDLK_CLUSTER_CONFIG.distro_name == 'NBBDS' }
+
+#- hosts: "{{ lookup('ini', 'hive section=role-mappings file=/root/sample.ini') }}"
+#  remote_user: ec2-user
+#  become: true
+#  pre_tasks:
+#      - include_vars: file="/etc/ansible/group_vars/all"
+#  roles:
+#      - { role: hive, when: CSF_CDLK_CLUSTER_CONFIG.distro_name == 'NBBDS' }
+
+#- hosts: "{{ lookup('ini', 'zookeeper section=role-mappings file=/root/sample.ini') }}"
+#  remote_user: ec2-user
+#  become: true
+#  pre_tasks:
+#      - include_vars: file="/etc/ansible/group_vars/all"
+#  roles:
+#      - { role: zookeeper, when: CSF_CDLK_CLUSTER_CONFIG.distro_name == 'NBBDS' }
+
+#- hosts: "{{ lookup('ini', 'yarn section=role-mappings file=/root/sample.ini') }}"
+#  remote_user: ec2-user
+#  become: true
+#  pre_tasks:
+#      - include_vars: file="/etc/ansible/group_vars/all"
+#  roles:
+#      - { role: yarn, when: CSF_CDLK_CLUSTER_CONFIG.distro_name == 'NBBDS' }
+
+#- hosts: "{{ lookup('ini', 'hbase section=role-mappings file=/root/sample.ini') }}"
+#  remote_user: ec2-user
+#  become: true
+#  pre_tasks:
+#      - include_vars: file="/etc/ansible/group_vars/all"
+#  roles:
+#      - { role: hbase, when: CSF_CDLK_CLUSTER_CONFIG.distro_name == 'NBBDS' }
+
+#- hosts: "{{ lookup('ini', 'spark2 section=role-mappings file=/root/sample.ini') }}"
+#  remote_user: ec2-user
+#  become: true
+#  pre_tasks:
+#      - include_vars: file="/etc/ansible/group_vars/all"
+#  roles:
+#      - { role: spark2, when: CSF_CDLK_CLUSTER_CONFIG.distro_name == 'NBBDS' }
+
+
+#- hosts: "{{ lookup('ini', 'tez section=role-mappings file=/root/sample.ini') }}"
+#  remote_user: ec2-user
+#  become: true
+#  pre_tasks:
+#      - include_vars: file="/etc/ansible/group_vars/all"
+#  roles:
+#      - { role: tez, when: CSF_CDLK_CLUSTER_CONFIG.distro_name == 'NBBDS' }
+
+#- hosts: "{{ lookup('ini', 'ambari_server section=role-mappings file=/root/sample.ini') }}"
+#  remote_user: ec2-user
+#  become: true
+#  pre_tasks:
+#      - include_vars: file="/etc/ansible/group_vars/all"
+#  roles:
+      - { role: set-environment-variables, when: CSF_CDLK_CLUSTER_CONFIG.distro_name == 'NBBDS' }
+
+- hosts: "{{ lookup('ini', 'mariaDB_master section=role-mappings file=/root/sample.ini') }}"
+  remote_user: ec2-user
+  become: true
+  pre_tasks:
+      - include_vars: file="/etc/ansible/group_vars/all"
+  roles:
+      - { role: mariaDB-server, tags: "mariadb-server" }
+      - { role: keepalived-install, tags: "keepalived-install" }
+
+- hosts: "{{ lookup('ini', 'mariaDB_slave section=role-mappings file=/root/sample.ini') }}"
+  remote_user: ec2-user
+  become: true
+  pre_tasks:
+      - include_vars: file="/etc/ansible/group_vars/all"
+  roles:
+      - mariaDB-slaves
+      - keepalived-install
+
+- hosts: "{{ lookup('ini', 'nginx_master section=role-mappings file=/root/sample.ini') }},{{ lookup('ini', 'nginx_backup section=role-mappings file=/root/sample.ini') }}"
+  remote_user: ec2-user
+  become: true
+  pre_tasks:
+      - include_vars: file="/etc/ansible/group_vars/all"
+  roles:
+      - { role: nginx-install, when: CSF_CDLK_CLUSTER_CONFIG.distro_name == 'CDH' and CSF_CDLK_CLUSTER_CONFIG.nginx_enable }
+      - { role: keepalived-install, when: CSF_CDLK_CLUSTER_CONFIG.distro_name == 'CDH' and CSF_CDLK_CLUSTER_CONFIG.nginx_enable }
+
+- hosts: "{{ lookup('ini', 'mariaDB_master section=role-mappings file=/root/sample.ini') }},{{ lookup('ini', 'mariaDB_slave section=role-mappings file=/root/sample.ini') }},{{ lookup('ini', 'nginx_master section=role-mappings file=/root/sample.ini') }},{{ lookup('ini', 'nginx_backup section=role-mappings file=/root/sample.ini') }}"
+  remote_user: ec2-user
+  become: true
+  pre_tasks:
+      - include_vars: file="/etc/ansible/group_vars/all"
+  roles:
+      - keepalived-conf
+
+- hosts: "{{ lookup('ini', 'mariaDB_slave section=role-mappings file=/root/sample.ini') }},{{ lookup('ini', 'nginx_backup section=role-mappings file=/root/sample.ini') }}"
+  remote_user: ec2-user
+  become: true
+  pre_tasks:
+      - include_vars: file="/etc/ansible/group_vars/all"
   tasks:
-      - name: Executing the uname
-        shell: uname -a
+      - replace:
+            dest: /etc/keepalived/keepalived.conf
+            regexp: 'priority 101'
+            replace: 'priority 100'
+        when:
+            - CSF_CDLK_CLUSTER_CONFIG.distro_name == 'CDH'
+            - CSF_CDLK_CLUSTER_CONFIG.nginx_enable
+      - replace:
+            dest: /etc/keepalived/keepalived.conf
+            regexp: 'priority 150'
+            replace: 'priority 100'
+        when:
+            - CSF_CDLK_CLUSTER_CONFIG.distro_name == 'NBBDS'
+
+- hosts: "{{ lookup('ini', 'nginx_master section=role-mappings file=/root/sample.ini') }},{{ lookup('ini', 'nginx_backup section=role-mappings file=/root/sample.ini') }}"
+  remote_user: ec2-user
+  become: true
+  pre_tasks:
+      - include_vars: file="/etc/ansible/group_vars/all"
+  tasks:
+      - name: Start nginx in nginx_master and backup node
+        shell: service nginx start
+        when:
+            - CSF_CDLK_CLUSTER_CONFIG.distro_name == 'CDH'
+            - CSF_CDLK_CLUSTER_CONFIG.nginx_enable
+
+      - name: Start keepalived in mginx_master and backup node
+        shell: service keepalived start
+        when:
+            - CSF_CDLK_CLUSTER_CONFIG.distro_name == 'CDH'
+            - CSF_CDLK_CLUSTER_CONFIG.nginx_enable
+
+- hosts: "{{ lookup('ini', 'mariaDB_master section=role-mappings file=/root/sample.ini') }}"
+  remote_user: ec2-user
+  become: true
+  pre_tasks:
+      - include_vars: file="/etc/ansible/group_vars/all"
+  tasks:
+      - name: start galera cluster
+        shell: galera_new_cluster
+
+- hosts: "{{ lookup('ini', 'mariaDB_master section=role-mappings file=/root/sample.ini') }},{{ lookup('ini', 'mariaDB_slave section=role-mappings file=/root/sample.ini') }}"
+  remote_user: ec2-user
+  become: true
+  pre_tasks:
+      - include_vars: file="/etc/ansible/group_vars/all"
+  tasks:
+      - name: Keepalived start
+        shell: service keepalived start
+
+- hosts: "{{ lookup('ini', 'mariaDB_slave section=role-mappings file=/root/sample.ini') }}"
+  remote_user: ec2-user
+  become: true
+  pre_tasks:
+      - include_vars: file="/etc/ansible/group_vars/all"
+  tasks:
+      - name: start cluster nodes
+        shell: service mysql start
+
+- hosts: "{{ lookup('ini', 'mariaDB_master section=role-mappings file=/root/sample.ini') }}"
+  remote_user: ec2-user
+  become: true
+  pre_tasks:
+      - include_vars: file="/etc/ansible/group_vars/all"
+  roles:
+      - database-config
+
+- hosts: "{{ lookup('ini', 'ambari_agent section=role-mappings file=/root/sample.ini') }}"
+  remote_user: ec2-user
+  become: true
+  pre_tasks:
+      - include_vars: file="/etc/ansible/group_vars/all"
+  roles:
+      - ambari-agents
+      - { role: set-environment-variables, when: CSF_CDLK_CLUSTER_CONFIG.distro_name == 'NBBDS' }
+      - { role: zabbix_agent, when: CSF_CDLK_CLUSTER_CONFIG.zabbix_enabled | bool  == true }
+
+
+- hosts: "{{ lookup('ini', 'ambari_server section=role-mappings file=/root/sample.ini') }}"
+  remote_user: ec2-user
+  become: true
+  pre_tasks:
+      - include_vars: file="/etc/ansible/group_vars/all"
+  roles:
+      - mysql-connector
+      - ambari-server
+      - ambari-blueprints
+      - postInstallAmbari
 

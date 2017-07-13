@@ -1,0 +1,42 @@
+---
+#- include_vars: ../../../{{ varsfile }}
+
+- name: Installing ntp, iptables-services packages
+  yum: name={{ item }} state=installed
+  with_items:
+    - ntp
+    - iptables-services
+    
+- name: Configuring iptables not to start on reboot
+  shell: systemctl disable iptables
+  
+- name: Configuring ip6tables not to start on reboot
+  shell: systemctl disable ip6tables
+  
+#- name: Configuring firewalld not to start on reboot
+#  shell: systemctl disable firewalld
+  
+- name: Configuring ntpd to start on reboot
+  shell: systemctl enable ntpd
+
+- name: Copying ntp.conf file
+  copy: src=ntp.conf dest=/etc/ntp.conf
+
+- name: Editing ntp.conf file
+  lineinfile: dest=/etc/ntp.conf regexp=^server line='server {{ CSF_CDLK_CLUSTER_CONFIG.ntp_server }}'
+
+- name: restart NTP
+  service: name=ntpd state=restarted
+
+- name: stop iptables, ip6tables, firewalld services
+  service: name={{ item }} state=stopped
+  with_items:
+    - iptables
+    - ip6tables
+#    - firewalld
+
+- name: Creating repo file
+  file: path=/etc/yum.repos.d/platform.repo state=touch
+
+- name: Adding platform_repo repo in /etc/yum.repo.d
+  copy: content="[platform_repo]\nname=platform_repo\nbaseurl={{ CSF_CDLK_CLUSTER_CONFIG.repo_url }}\ngpgcheck=0\nenabled=1\npriority=1" dest=/etc/yum.repos.d/platform.repo

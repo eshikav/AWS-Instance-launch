@@ -1,0 +1,188 @@
+---
+#- include_vars: ../../../vars.yaml
+
+- name: Copying my.cnf file
+  copy: src=my.cnf dest=/etc/my.cnf
+
+- name: Show databases
+  shell: mysql -uroot -p{{ VAULT_CRED_BUNDLE[MARIADB.login_cred].vault_passwd }} -e 'show databases' >> /dev/zzz 2>&1
+  register: result1
+  ignore_errors: True
+
+- name: Execcute if the previous command did not succeed
+  shell: sleep 15;mysql -u root -e "grant all privileges on *.* to root@'localhost' identified by '{{ VAULT_CRED_BUNDLE[MARIADB.login_cred].vault_passwd }}';flush privileges;"
+  when: result1|failed
+
+- name: Grant root privilleges
+  shell: mysql -uroot -p{{ VAULT_CRED_BUNDLE[MARIADB.login_cred].vault_passwd }} -e "grant all privileges on *.* to root@'{{ AMBARI.AMBARI_SERVER.host }}' identified by '{{ VAULT_CRED_BUNDLE[MARIADB.login_cred].vault_passwd }}';flush privileges;"
+
+- name: Set root password
+  shell: mysql -u root --password='{{ VAULT_CRED_BUNDLE[MARIADB.login_cred].vault_passwd }}' -e "UPDATE mysql.user SET Password=PASSWORD('{{ VAULT_CRED_BUNDLE[MARIADB.login_cred].vault_passwd }}') WHERE User='root';FLUSH PRIVILEGES;"
+
+- name: Grant all hosts root privilleges
+  shell: mysql -u root  -p{{ VAULT_CRED_BUNDLE[MARIADB.login_cred].vault_passwd }} -e "grant all privileges on *.* to 'root'@'%' identified by '{{ VAULT_CRED_BUNDLE[MARIADB.login_cred].vault_passwd }}';flush privileges;"
+
+- name: Creating Ambari accounts in DB
+  shell: mysql -u root  -p{{ VAULT_CRED_BUNDLE[MARIADB.login_cred].vault_passwd }}  -e "CREATE USER IF NOT EXISTS '{{ VAULT_CRED_BUNDLE[AMBARI.AMBARI_SERVER.login_cred].vault_username }}'@'%' IDENTIFIED BY '{{ VAULT_CRED_BUNDLE[AMBARI.AMBARI_SERVER.login_cred].vault_passwd }}';GRANT ALL PRIVILEGES ON *.* TO '{{ VAULT_CRED_BUNDLE[AMBARI.AMBARI_SERVER.login_cred].vault_username }}'@'%';"
+
+- name: Creating Ambari accounts in DB
+  shell: mysql -u root  -p{{ VAULT_CRED_BUNDLE[MARIADB.login_cred].vault_passwd }}  -e "CREATE USER  IF NOT EXISTS '{{ VAULT_CRED_BUNDLE[AMBARI.AMBARI_SERVER.login_cred].vault_username }}'@'localhost' IDENTIFIED BY '{{ VAULT_CRED_BUNDLE[AMBARI.AMBARI_SERVER.login_cred].vault_passwd }}';GRANT ALL PRIVILEGES ON *.* TO '{{ VAULT_CRED_BUNDLE[AMBARI.AMBARI_SERVER.login_cred].vault_username }}'@'localhost';"
+
+- name: Creating Ambari accounts in DB
+  shell: mysql -u root  -p{{ VAULT_CRED_BUNDLE[MARIADB.login_cred].vault_passwd }}  -e "CREATE USER IF NOT EXISTS '{{ VAULT_CRED_BUNDLE[AMBARI.AMBARI_SERVER.login_cred].vault_username }}'@'{{ AMBARI.AMBARI_SERVER.host }}' IDENTIFIED BY '{{ VAULT_CRED_BUNDLE[AMBARI.AMBARI_SERVER.login_cred].vault_passwd }}';GRANT ALL PRIVILEGES ON *.* TO '{{ VAULT_CRED_BUNDLE[AMBARI.AMBARI_SERVER.login_cred].vault_username }}'@'{{ AMBARI.AMBARI_SERVER.host }}';FLUSH PRIVILEGES;"
+
+
+
+- name: Creating hivedb database
+  shell: mysql -u root -p{{ VAULT_CRED_BUNDLE[MARIADB.login_cred].vault_passwd }} -e "CREATE DATABASE IF NOT EXISTS {{ item.hive_db_name }};"
+  when:
+    - (item.NAME=='HIVE')
+    - (item.hive_db_name is defined)
+    - (VAULT_CRED_BUNDLE[item.login_cred].vault_passwd != "")
+    - (item.hive_db_name != "")
+  with_items: DATALAKE.SERVICES
+
+- name: Creating hive user
+  shell: mysql -u root  -p{{ VAULT_CRED_BUNDLE[MARIADB.login_cred].vault_passwd }}  -e "USE {{ item.hive_db_name }};CREATE USER IF NOT EXISTS 'hive'@'localhost' IDENTIFIED BY '{{ VAULT_CRED_BUNDLE[item.login_cred].vault_passwd }}';GRANT ALL PRIVILEGES ON *.* TO 'hive'@'localhost';"
+  when:
+    - (item.NAME=='HIVE')
+    - (item.hive_db_name is defined)
+    - (VAULT_CRED_BUNDLE[item.login_cred].vault_passwd != "")
+    - (item.hive_db_name != "")
+  with_items: DATALAKE.SERVICES
+
+- name: Creating hive user
+  shell: mysql -u root  -p{{ VAULT_CRED_BUNDLE[MARIADB.login_cred].vault_passwd }}  -e "USE {{ item.hive_db_name }};CREATE USER IF NOT EXISTS 'hive'@'{{ MARIADB.mariadb_master }}' IDENTIFIED BY '{{ VAULT_CRED_BUNDLE[item.login_cred].vault_passwd }}';GRANT ALL PRIVILEGES ON *.* TO 'hive'@'{{ MARIADB.mariadb_master }}';"
+  when:
+    - (item.NAME=='HIVE')
+    - (item.hive_db_name is defined)
+    - (VAULT_CRED_BUNDLE[item.login_cred].vault_passwd != "")
+    - (item.hive_db_name != "")
+  with_items: DATALAKE.SERVICES
+
+
+- name: Creating hive user
+  shell: mysql -u root  -p{{ VAULT_CRED_BUNDLE[MARIADB.login_cred].vault_passwd }}  -e "USE {{ item.hive_db_name }};CREATE USER IF NOT EXISTS 'hive'@'%' IDENTIFIED BY '{{ VAULT_CRED_BUNDLE[item.login_cred].vault_passwd }}';GRANT ALL PRIVILEGES ON *.* TO 'hive'@'%';FLUSH PRIVILEGES;"
+  when:
+    - (item.NAME=='HIVE')
+    - (item.hive_db_name is defined)
+    - (VAULT_CRED_BUNDLE[item.login_cred].vault_passwd != "")
+    - (item.hive_db_name != "")
+  with_items: DATALAKE.SERVICES
+
+
+- name: printing
+  debug: msg="{{ item.NAME }} {{ item.login_cred }} {{ item.ooziedb_name }}"
+  with_items: DATALAKE.SERVICES
+  when:
+    - ( item.NAME=='OOZIE' )
+
+
+- name: Creating ooziedb database
+  shell: mysql -u root  -p{{ VAULT_CRED_BUNDLE[MARIADB.login_cred].vault_passwd }} -e "CREATE DATABASE IF NOT EXISTS {{ item.ooziedb_name }};"
+  when:
+    - (item.NAME=='OOZIE')
+    - (item.ooziedb_name is defined)
+    - (VAULT_CRED_BUNDLE[item.login_cred].vault_passwd is defined)
+    - (VAULT_CRED_BUNDLE[item.login_cred].vault_passwd != "")
+    - (item.ooziedb_name != "")
+    - (CSF_CDLK_CLUSTER_CONFIG.distro_name == "CDH")
+  with_items: DATALAKE.SERVICES
+
+
+- name: Creating oozie user
+  shell: mysql -u root  -p{{ VAULT_CRED_BUNDLE[MARIADB.login_cred].vault_passwd }}  -e "USE {{ item.ooziedb_name }};CREATE USER IF NOT EXISTS 'oozie'@'localhost' IDENTIFIED BY '{{ VAULT_CRED_BUNDLE[item.login_cred].vault_passwd }}';GRANT ALL PRIVILEGES ON *.* TO 'oozie'@'localhost';"
+  when:
+    - (item.NAME=='OOZIE')
+    - (item.ooziedb_name is defined)
+    - (VAULT_CRED_BUNDLE[item.login_cred].vault_passwd is defined)
+    - (VAULT_CRED_BUNDLE[item.login_cred].vault_passwd != "")
+    - (item.ooziedb_name != "")
+    - (CSF_CDLK_CLUSTER_CONFIG.distro_name == "CDH")
+  with_items: DATALAKE.SERVICES
+
+
+- name: Creating oozie user
+  shell: mysql -u root  -p{{ VAULT_CRED_BUNDLE[MARIADB.login_cred].vault_passwd }}  -e "USE {{ item.ooziedb_name }};CREATE USER IF NOT EXISTS 'oozie'@'{{ MARIADB.mariadb_master }}' IDENTIFIED BY '{{ VAULT_CRED_BUNDLE[item.login_cred].vault_passwd }}';GRANT ALL PRIVILEGES ON *.* TO 'oozie'@'{{ MARIADB.mariadb_master }}';"
+  when:
+    - (item.NAME=='OOZIE')
+    - (item.ooziedb_name is defined)
+    - (VAULT_CRED_BUNDLE[item.login_cred].vault_passwd is defined)
+    - (VAULT_CRED_BUNDLE[item.login_cred].vault_passwd != "")
+    - (item.ooziedb_name != "")
+    - (CSF_CDLK_CLUSTER_CONFIG.distro_name == "CDH")
+  with_items: DATALAKE.SERVICES
+
+- name: Creating oozie user
+  shell: mysql -u root  -p{{ VAULT_CRED_BUNDLE[MARIADB.login_cred].vault_passwd }}  -e "USE {{ item.ooziedb_name }};CREATE USER IF NOT EXISTS 'oozie'@'%' IDENTIFIED BY '{{ VAULT_CRED_BUNDLE[item.login_cred].vault_passwd }}';GRANT ALL PRIVILEGES ON *.* TO 'oozie'@'%';FLUSH PRIVILEGES;"
+  when:
+    - (item.NAME=='OOZIE')
+    - (item.ooziedb_name is defined)
+    - (VAULT_CRED_BUNDLE[item.login_cred].vault_passwd is defined)
+    - (VAULT_CRED_BUNDLE[item.login_cred].vault_passwd != "")
+    - (item.ooziedb_name != "")
+    - (CSF_CDLK_CLUSTER_CONFIG.distro_name == "CDH")
+  with_items: DATALAKE.SERVICES
+
+- name: Creating Hue db
+  shell: mysql -u{{ VAULT_CRED_BUNDLE[AMBARI.AMBARI_SERVER.login_cred].vault_username }}  -p{{ VAULT_CRED_BUNDLE[AMBARI.AMBARI_SERVER.login_cred].vault_passwd }} -e "CREATE DATABASE IF NOT EXISTS {{ item.hue_db_name }};"
+  when:
+    - (item.NAME=='HUE')
+    - (item.hue_db_name is defined)
+    - (VAULT_CRED_BUNDLE[item.login_cred].vault_passwd is defined)
+    - (VAULT_CRED_BUNDLE[item.login_cred].vault_passwd != "")
+    - (item.hue_db_name != "")
+    - (CSF_CDLK_CLUSTER_CONFIG.distro_name == "CDH")
+  with_items: DATALAKE.SERVICES
+
+
+
+- name: Creating hue user
+  shell: mysql -u root  -p{{ VAULT_CRED_BUNDLE[MARIADB.login_cred].vault_passwd }}  -e "USE {{ item.hue_db_name }};CREATE USER IF NOT EXISTS 'hue'@'localhost' IDENTIFIED BY '{{ VAULT_CRED_BUNDLE[item.login_cred].vault_passwd }}';GRANT ALL PRIVILEGES ON *.* TO 'hue'@'localhost';"
+  when:
+    - (item.NAME=='HUE')
+    - (item.hue_db_name is defined)
+    - (VAULT_CRED_BUNDLE[item.login_cred].vault_passwd is defined)
+    - (VAULT_CRED_BUNDLE[item.login_cred].vault_passwd != "")
+    - (item.hue_db_name != "")
+    - (CSF_CDLK_CLUSTER_CONFIG.distro_name == "CDH")
+  with_items: DATALAKE.SERVICES
+
+
+
+- name: Creating hue user
+  shell: mysql -u root  -p{{ VAULT_CRED_BUNDLE[MARIADB.login_cred].vault_passwd }}  -e "USE {{ item.hue_db_name }};CREATE USER IF NOT EXISTS 'hue'@'{{ MARIADB.mariadb_master }}' IDENTIFIED BY '{{ VAULT_CRED_BUNDLE[item.login_cred].vault_passwd }}';GRANT ALL PRIVILEGES ON *.* TO 'hue'@'{{ MARIADB.mariadb_master }}';"
+  when:
+    - (item.NAME=='HUE')
+    - (item.hue_db_name is defined)
+    - (VAULT_CRED_BUNDLE[item.login_cred].vault_passwd is defined)
+    - (VAULT_CRED_BUNDLE[item.login_cred].vault_passwd != "")
+    - (item.hue_db_name != "")
+    - (CSF_CDLK_CLUSTER_CONFIG.distro_name == "CDH")
+  with_items: DATALAKE.SERVICES
+
+
+
+- name: Creating hue user
+  shell: mysql -u root  -p{{ VAULT_CRED_BUNDLE[MARIADB.login_cred].vault_passwd }}  -e "USE {{ item.hue_db_name }};CREATE USER IF NOT EXISTS 'hue'@'%' IDENTIFIED BY '{{ VAULT_CRED_BUNDLE[item.login_cred].vault_passwd }}';GRANT ALL PRIVILEGES ON *.* TO 'hue'@'%';FLUSH PRIVILEGES;"
+  when:
+    - (item.NAME=='HUE')
+    - (item.hue_db_name is defined)
+    - (VAULT_CRED_BUNDLE[item.login_cred].vault_passwd is defined)
+    - (VAULT_CRED_BUNDLE[item.login_cred].vault_passwd != "")
+    - (item.hue_db_name != "")
+    - (CSF_CDLK_CLUSTER_CONFIG.distro_name == "CDH")
+  with_items: DATALAKE.SERVICES
+
+
+- name: Creating hue user
+  shell: mysql -u root  -p{{ VAULT_CRED_BUNDLE[MARIADB.login_cred].vault_passwd }}  -e "USE {{ item.hue_db_name }};CREATE USER IF NOT EXISTS 'hue'@'%' IDENTIFIED BY '{{ VAULT_CRED_BUNDLE[item.login_cred].vault_passwd }}';GRANT ALL PRIVILEGES ON *.* TO 'hue'@'%';FLUSH PRIVILEGES;"
+  when:
+    - (item.NAME=='HUE')
+    - (item.hue_db_name is defined)
+    - (VAULT_CRED_BUNDLE[item.login_cred].vault_passwd is defined)
+    - (VAULT_CRED_BUNDLE[item.login_cred].vault_passwd != "")
+    - (item.hue_db_name != "")
+    - (CSF_CDLK_CLUSTER_CONFIG.distro_name == "CDH")
+  with_items: DATALAKE.SERVICES
+

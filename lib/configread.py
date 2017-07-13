@@ -20,12 +20,13 @@ class LookupModule(LookupBase):
 
     def expandregex(self,arg):
         if ":" in arg:
-            name=arg.split('[')[0]
+            fname=arg.split('[')[0]
+            lname=arg.split(']')[1]
             start=int(arg.split('[')[1].split(":")[0])
-            end=int(arg.split('[')[1].split(":")[1].strip(']'))
+            end=int(arg.split('[')[1].split(":")[1].strip(']').split(']')[0])
             result=[]
             for i in range(start,end+1):
-                result.append(name+str(i))
+                result.append(fname+str(i)+lname)
             return result
         else:
             return None

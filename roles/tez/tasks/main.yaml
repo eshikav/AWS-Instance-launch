@@ -1,0 +1,21 @@
+- name: creating directory
+  file: path=/var/service_repo state=directory
+
+
+- name: copy files related to tez service
+  get_url:
+     url: '{{ CSF_CDLK_CLUSTER_CONFIG.repo_url }}/apache-tez-0.8.5-bin.tar.gz'
+     dest: /var/service_repo/
+
+
+- name: Extract tez tar file
+  shell: tar -zxvf /var/service_repo/apache-tez-0.8.5-bin.tar.gz -C /opt/
+
+- name: Delete tez default Config Folder
+  file: path=/opt/apache-tez-0.8.5-bin/conf state=absent
+
+- name: Create tez Config Folder
+  file: path=/etc/tez/conf owner=root group=root mode=0755 state=directory recurse=yes
+
+- name: Create symlink for tez Config
+  file: src=/etc/tez/conf/ dest=/opt/apache-tez-0.8.5-bin/conf state=link

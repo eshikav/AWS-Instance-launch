@@ -1,0 +1,24 @@
+- name: creating directory
+  file: path=/var/service_repo state=directory
+
+- name: copy files related to spark service
+  get_url:
+     url: '{{ CSF_CDLK_CLUSTER_CONFIG.repo_url }}/spark-2.0.2-bin-hadoop2.7.tgz'
+     dest: /var/service_repo/
+
+  
+  
+- name: Extract spark tar file
+  shell: tar -zxvf /var/service_repo/spark-2.0.2-bin-hadoop2.7.tgz -C /opt/
+
+- name: Delete Spark default Config Folder
+  file: path=/opt/spark-2.0.2-bin-hadoop2.7/conf state=absent
+
+- name: Create Spark Config Folder
+  file: path=/etc/spark2/conf owner=root group=root mode=0755 state=directory recurse=yes
+
+- name: Create symlink for Spark Config
+  file: src=/etc/spark2/conf/ dest=/opt/spark-2.0.2-bin-hadoop2.7/conf state=link
+
+- name: Copy spark-shuffle jar to hadoop lib directory
+  shell: cp /opt/spark-2.0.2-bin-hadoop2.7/yarn/spark-*-yarn-shuffle.jar /opt/hadoop-2.7.0/share/hadoop/common/lib/
